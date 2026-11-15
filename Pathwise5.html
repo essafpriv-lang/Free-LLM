@@ -1,0 +1,879 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Pathwise</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a one-screen phone-style app (header, scrolling chat feed, composer, bottom tabs), centered at 560px on wide screens. */
+:root {
+  --bg: #F2F5F7;
+  --surface: #FFFFFF;
+  --fg: #13242F;
+  --muted: #5B6B77;
+  --line: #D9E1E6;
+  --accent: #0E7C86;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #DDF0F2;
+  --warm: #E7A33E;
+  --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1A21; --surface: #16262F; --fg: #E4EDF1; --muted: #93A5B0; --line: #27404C;
+    --accent: #52C0CB; --accent-fg: #08222A; --accent-soft: #17383F; --warm: #F0B45A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1A21; --surface: #16262F; --fg: #E4EDF1; --muted: #93A5B0; --line: #27404C;
+  --accent: #52C0CB; --accent-fg: #08222A; --accent-soft: #17383F; --warm: #F0B45A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 14px 8px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 28px; height: 28px; display: block; }
+.logo .bg { fill: var(--accent); }
+.logo .line { fill: none; stroke: var(--accent-fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.logo .dot { fill: var(--warm); }
+.name { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: -0.01em; }
+.pill { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; }
+.top-r { display: flex; align-items: center; gap: 10px; }
+.reset { min-height: 32px; padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 12.5px; text-decoration: underline; cursor: pointer; }
+.note { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
+
+.stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.feed { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-block: 12px 16px; }
+@media (prefers-reduced-motion: no-preference) { .feed { scroll-behavior: smooth; } }
+
+.msg { max-width: 88%; padding: 10px 14px; border-radius: 16px; overflow-wrap: anywhere; }
+.msg.coach { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-top-left-radius: 4px; }
+.msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-top-right-radius: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  .msg { animation: rise 0.25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+
+.typing { align-self: flex-start; display: flex; gap: 5px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; border-top-left-radius: 4px; }
+.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: 0.6; }
+@media (prefers-reduced-motion: no-preference) {
+  .typing span { animation: blink 1s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; text-align: left; }
+.chip:hover { background: var(--accent-soft); }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+
+.primary { min-height: 42px; padding: 9px 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-fg); font-weight: 600; cursor: pointer; }
+.primary:hover { filter: brightness(1.08); }
+.primary[disabled] { opacity: 0.6; cursor: default; }
+.small { min-height: 36px; padding: 6px 12px; font-size: 13.5px; }
+.picker .row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.hint { font-size: 13px; color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.card-head strong { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--warm); }
+@media (prefers-reduced-motion: no-preference) { .bar i { transition: width 0.3s ease; } }
+
+.tasks { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.tasks li { display: flex; gap: 12px; align-items: flex-start; }
+.tasks input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.tasks label { display: flex; flex-direction: column; min-width: 0; cursor: pointer; }
+.tasks .slot { font-size: 12.5px; color: var(--muted); }
+.tasks input:checked + label .t { text-decoration: line-through; color: var(--muted); }
+
+.ladder { list-style: none; margin: 0; padding: 0; }
+.ladder li { position: relative; padding: 0 0 16px 28px; }
+.ladder li:last-child { padding-bottom: 0; }
+.ladder li::before { content: ""; position: absolute; left: 0; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.ladder li:last-child::before { background: var(--warm); }
+.ladder li:not(:last-child)::after { content: ""; position: absolute; left: 5px; top: 20px; bottom: -2px; width: 2px; background: var(--line); }
+.lvl { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ladder p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.ladder .primary { margin-top: 8px; }
+
+.composer { display: flex; gap: 8px; padding-block: 10px; border-top: 1px solid var(--line); }
+.composer input { flex: 1; min-width: 0; min-height: 44px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.composer input::placeholder { color: var(--muted); }
+.attach { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--text, inherit); display: grid; place-items: center; cursor: pointer; }
+.attach svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.atts { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 8px; }
+.att { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 6px 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12.5px; }
+.att img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; }
+.att span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.att button { min-height: 24px; min-width: 24px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
+.msg.user img { display: block; max-width: 180px; max-height: 160px; border-radius: 10px; margin-bottom: 6px; }
+.send { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; cursor: pointer; }
+.send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding-block: 6px 10px; border-top: 1px solid var(--line); }
+.tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+.tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-current="true"] { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+.badge { position: absolute; top: 5px; left: calc(50% + 8px); width: 9px; height: 9px; border-radius: 50%; background: var(--warm); }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 28 28" aria-hidden="true"><rect class="bg" width="28" height="28" rx="8"/><path class="line" d="M7 19l5-5 4 3 5-7"/><circle class="dot" cx="21" cy="10" r="2"/></svg>
+      <span class="name">Pathwise</span>
+    </div>
+    <span class="top-r"><button type="button" class="reset" id="reset">Start fresh</button><span class="pill">Beta</span></span>
+  </header>
+  <p class="note">Homework and custom goals are answered by Claude, which searches your plan and a built-in study library. Your progress is saved on this device.</p>
+
+  <main class="stage">
+    <section class="feed" id="feed-today" role="log" aria-live="polite" aria-label="Today"></section>
+    <section class="feed" id="feed-homework" role="log" aria-live="polite" aria-label="Homework" hidden></section>
+    <section class="feed" id="feed-goals" role="log" aria-live="polite" aria-label="Big Goals" hidden></section>
+  </main>
+
+  <div class="atts" id="atts" hidden></div>
+  <form class="composer" id="composer" autocomplete="off">
+    <button class="attach" type="button" id="attach" aria-label="Attach a photo or file" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.4-8.4"/></svg></button>
+    <input id="files" type="file" accept="image/*,.txt,.md,.csv,.json" multiple hidden>
+    <input id="msg" type="text" aria-label="Message" placeholder="Add your own task">
+    <button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+  </form>
+
+  <nav class="tabs" aria-label="Modes">
+    <button type="button" class="tab" data-mode="today" aria-current="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15l2 2 4-4"/></svg>
+      Today<span class="badge" id="badge-today" hidden></span>
+    </button>
+    <button type="button" class="tab" data-mode="homework">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A2 2 0 0 1 7 2.5h12v15H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12"/></svg>
+      Homework
+    </button>
+    <button type="button" class="tab" data-mode="goals">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></svg>
+      Big Goals
+    </button>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var el = function (tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* Saved progress: per-viewer localStorage, always guarded because it can be unavailable or empty. */
+  var KEY = 'pathwise:v1';
+  var S = {};
+  try { S = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { S = {}; }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function dayKey() { return new Date().toDateString(); }
+
+  function makeFeed(node) {
+    var api = {
+      node: node,
+      scroll: function () { node.scrollTop = node.scrollHeight; },
+      user: function (text) {
+        var b = el('div', 'msg user');
+        b.textContent = text;
+        node.append(b);
+        api.scroll();
+        return b;
+      },
+      coach: async function (html, ms) {
+        ms = ms === undefined ? 450 : ms;
+        var b;
+        if (ms > 0) {
+          var t = el('div', 'typing', '<span></span><span></span><span></span>');
+          node.append(t);
+          api.scroll();
+          await wait(ms);
+          t.remove();
+        }
+        b = el('div', 'msg coach', html);
+        node.append(b);
+        api.scroll();
+        return b;
+      },
+      add: function (n) { node.append(n); api.scroll(); return n; },
+      chips: function (options, onPick) {
+        var wrap = el('div', 'chips');
+        options.forEach(function (o) {
+          var b = el('button', 'chip');
+          b.type = 'button';
+          b.textContent = o.label;
+          b.addEventListener('click', function () {
+            wrap.remove();
+            api.user(o.label);
+            onPick(o);
+          });
+          wrap.append(b);
+        });
+        node.append(wrap);
+        api.scroll();
+        return wrap;
+      }
+    };
+    return api;
+  }
+
+  var fToday = makeFeed($('#feed-today'));
+  var fHw = makeFeed($('#feed-homework'));
+  var fGoals = makeFeed($('#feed-goals'));
+  var active = 'today';
+
+  /* ---------------- TODAY ---------------- */
+  var T = {
+    options: [
+      { text: 'Revise chemistry for the Sunday quiz', on: false },
+      { text: 'Write the intro of my English essay', on: false },
+      { text: '30-minute workout', on: false },
+      { text: 'Read 20 pages of my book', on: false }
+    ],
+    stage: 'pick', items: [], card: null, celebrated: false
+  };
+  var pickerEl = null;
+  function saveToday() {
+    S.today = { date: dayKey(), options: T.options, items: T.items, stage: T.stage, celebrated: T.celebrated };
+    persist();
+  }
+
+  function updateHint() {
+    if (!pickerEl) return;
+    var n = T.options.filter(function (o) { return o.on; }).length;
+    $('#pick-hint', pickerEl).textContent = n ? n + ' selected' : 'Pick at least one';
+  }
+
+  function renderPicker() {
+    if (!pickerEl) {
+      pickerEl = el('div', 'picker',
+        '<div class="chips" role="group" aria-label="Tasks for today"></div>' +
+        '<div class="row"><button type="button" class="primary" id="build">Plan my day</button><span class="hint" id="pick-hint"></span></div>');
+      fToday.add(pickerEl);
+      $('#build', pickerEl).addEventListener('click', buildPlan);
+    }
+    var box = $('.chips', pickerEl);
+    box.innerHTML = '';
+    T.options.forEach(function (o) {
+      var b = el('button', 'chip');
+      b.type = 'button';
+      b.textContent = o.text;
+      b.setAttribute('aria-pressed', String(o.on));
+      b.addEventListener('click', function () {
+        o.on = !o.on;
+        b.setAttribute('aria-pressed', String(o.on));
+        updateHint();
+        saveToday();
+      });
+      box.append(b);
+    });
+    updateHint();
+    fToday.scroll();
+    saveToday();
+  }
+
+  function renderPlan() {
+    if (!T.card) T.card = fToday.add(el('div', 'card'));
+    var done = T.items.filter(function (i) { return i.done; }).length;
+    var total = T.items.length;
+    T.card.innerHTML =
+      '<div class="card-head"><strong>Today’s plan</strong><span class="count">' + done + ' of ' + total + ' done</span></div>' +
+      '<div class="bar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="' + total + '" aria-valuenow="' + done + '"><i style="width:' + (total ? (done / total) * 100 : 0) + '%"></i></div>' +
+      '<ul class="tasks"></ul>';
+    var ul = $('.tasks', T.card);
+    T.items.forEach(function (it, idx) {
+      var li = el('li');
+      var id = 'task-' + idx;
+      li.innerHTML = '<input type="checkbox" id="' + id + '"' + (it.done ? ' checked' : '') + '><label for="' + id + '"><span class="t">' + esc(it.text) + '</span><span class="slot">' + esc(it.slot) + '</span></label>';
+      $('input', li).addEventListener('change', function (e) {
+        it.done = e.target.checked;
+        renderPlan();
+        var again = $('#task-' + idx, T.card);
+        if (again) again.focus();
+        checkAllDone();
+      });
+      ul.append(li);
+    });
+    saveToday();
+  }
+
+  async function checkAllDone() {
+    var all = T.items.length && T.items.every(function (i) { return i.done; });
+    if (all && !T.celebrated) {
+      T.celebrated = true;
+      await fToday.coach('Everything on your list is done. That is a full day of real progress. Take a proper break before the evening.');
+    }
+  }
+
+  async function buildPlan() {
+    var chosen = T.options.filter(function (o) { return o.on; }).map(function (o) { return o.text; });
+    if (!chosen.length) { $('#pick-hint', pickerEl).textContent = 'Pick a task first'; return; }
+    pickerEl.remove();
+    pickerEl = null;
+    T.stage = 'plan';
+    fToday.user('Today I want to: ' + chosen.join(', ') + '.');
+    var slots = ['4:00 PM · 45 min', '5:15 PM · 30 min', '7:30 PM · 30 min'];
+    T.items = chosen.map(function (t, i) {
+      return { text: t, slot: i < 3 ? slots[i] : 'If there is time', done: false };
+    });
+    var msg = chosen.length > 3
+      ? 'That is a lot for one day. I put the first three in your schedule and moved the rest to “If there is time”. Start with the task that needs the most focus while your energy is high.'
+      : 'Here is a realistic order for today. Start with the task that needs the most focus while your energy is high, and keep the easier ones for later.';
+    await fToday.coach(msg);
+    renderPlan();
+    fToday.chips([{ label: 'Evening check-in' }], checkin);
+  }
+
+  async function checkin() {
+    await fToday.coach('How did today go?');
+    fToday.chips([
+      { label: 'I did everything', r: 'Nice work. Think about what helped you finish it all. We will use the same approach tomorrow.' },
+      { label: 'I did most of it', r: 'That is still a good day. Whatever is unfinished moves to tomorrow’s list, so nothing is lost.' },
+      { label: 'It was a rough day', r: 'Some days go like that. Rest first. Then pick one small task for tomorrow morning and we will start there.' }
+    ], function (o) { fToday.coach(o.r); });
+  }
+
+  function addToToday(text, slot) {
+    if (T.stage === 'pick') {
+      T.options.push({ text: text, on: true });
+      renderPicker();
+    } else {
+      T.items.push({ text: text, slot: slot, done: false });
+      T.celebrated = false;
+      renderPlan();
+    }
+    if (active !== 'today') $('#badge-today').hidden = false;
+  }
+
+  async function todayStart() {
+    var d = new Date();
+    var h = d.getHours();
+    var part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
+    var day = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var sv = S.today;
+    var back = false, carried = 0;
+    if (sv && sv.date === dayKey() && sv.options && sv.items) {
+      T.options = sv.options; T.items = sv.items; T.stage = sv.stage; T.celebrated = !!sv.celebrated;
+      back = true;
+    } else if (sv && sv.items) {
+      var seen = {};
+      T.options.forEach(function (o) { seen[o.text] = 1; });
+      sv.items.forEach(function (i) {
+        if (!i.done && !seen[i.text]) { seen[i.text] = 1; T.options.push({ text: i.text, on: true }); carried++; }
+      });
+    }
+    if (back && T.stage === 'plan') {
+      await fToday.coach('Welcome back. It is ' + esc(day) + '. Here is your plan so far.', 0);
+      renderPlan();
+      fToday.chips([{ label: 'Evening check-in' }], checkin);
+      return;
+    }
+    var intro = back ? 'Welcome back. ' : 'Good ' + part + '. ';
+    var extra = carried ? ' ' + carried + (carried === 1 ? ' unfinished task' : ' unfinished tasks') + ' from last time ' + (carried === 1 ? 'is' : 'are') + ' already ticked.' : '';
+    await fToday.coach(intro + 'It is ' + esc(day) + '. What do you want to get done today?' + extra + ' Tap the ones that fit, or type your own below.', 0);
+    renderPicker();
+  }
+
+  async function todayText(t) {
+    if (T.stage === 'pick') {
+      T.options.push({ text: t, on: true });
+      renderPicker();
+    } else {
+      fToday.user(t);
+      addToToday(t, 'Added just now');
+      await fToday.coach('Added to your plan.', 300);
+    }
+  }
+
+  /* ---------------- AI (Claude via the page's sample capability) ---------------- */
+  var AI = null;
+  try { if (window.claude && claude.use) claude.use('sample').then(function (s) { AI = s; }, function () {}); } catch (e) {}
+  var LIB = [
+    { t: 'Active recall', x: 'Close the book and write or say what you remember, then check. Testing yourself beats rereading. Do it after each study block.' },
+    { t: 'Spaced repetition', x: 'Review material after 1 day, 3 days, 1 week and 3 weeks. Spacing out reviews makes memories last far longer than cramming.' },
+    { t: 'Pomodoro focus blocks', x: 'Work 25 minutes with no phone, rest 5, repeat. After four rounds take a 20-minute break. Good for starting tasks you are avoiding.' },
+    { t: 'Essay structure', x: 'Intro with a clear thesis, body paragraphs that each make one point with evidence, and a conclusion that answers the question. Plan in 5 bullet points first.' },
+    { t: 'Solving linear equations', x: 'Keep the equation balanced: do the same operation to both sides. Remove addition or subtraction first, then divide or multiply, then check by substituting.' },
+    { t: 'Photosynthesis', x: 'Plants turn carbon dioxide and water into glucose using light energy captured by chlorophyll in chloroplasts. Oxygen is released as a by-product.' },
+    { t: 'Exam past papers', x: 'Do papers under timed conditions, mark them honestly, and list every lost mark by topic. Study the topics that lost the most marks.' },
+    { t: 'Breaking down big goals', x: 'Work backward: milestone, month, week, today. Make each step small enough to start in five minutes. Review weekly and shrink steps when a week goes badly.' }
+  ];
+  var hist = [];
+  var RULES = 'If the student attaches a photo or file, read it carefully and help with what it shows, still guiding rather than just giving answers. You are Pathwise, a warm, concise study coach for students. Guide rather than hand over answers: for homework, explain the idea briefly, ask one question to let the student try, and only give a full solution if they are stuck or ask. Keep replies under 120 words, plain text, no markdown. Use search_library for study techniques and facts, and search_my_plan to see the student\u2019s tasks and goal when relevant. You cannot browse the web; if asked for live or very recent information, say so and answer from general knowledge.';
+  var TOOLS = [
+    { name: 'search_library', description: 'Search the built-in study library for techniques and short facts.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+      execute: function (i) {
+        var w = String(i.query || '').toLowerCase().split(/\W+/).filter(Boolean);
+        var r = LIB.filter(function (e) { var h = (e.t + ' ' + e.x).toLowerCase(); return w.some(function (k) { return k.length > 2 && h.indexOf(k) > -1; }); });
+        return r.slice(0, 3).map(function (e) { return e.t + ': ' + e.x; });
+      } },
+    { name: 'search_my_plan', description: 'Return the student\u2019s tasks for today and their big goal.', inputSchema: { type: 'object', properties: {} },
+      execute: function () {
+        return { today: T.items.map(function (x) { return x.text + (x.done ? ' (done)' : ''); }), goal: G.stage === 'done' ? { name: G.name, deadline: G.deadline, plan: G.plan || null } : null };
+      } }
+  ];
+  async function askAI(feed, text, atts) {
+    if (!AI) { await feed.coach('The AI helper is not available here. Try the sample topics instead.', 300); return; }
+    atts = atts || [];
+    var imgs = atts.filter(function (a) { return a.image; }).map(function (a) { return a.file; });
+    var full = text, short = text, budget = 40000;
+    atts.forEach(function (a) {
+      if (a.image) { short += '\n[Attached image: ' + a.file.name + ']'; return; }
+      var t = (a.text || '').slice(0, Math.min(20000, budget)); budget -= t.length;
+      full += '\n\n--- File: ' + a.file.name + ' ---\n' + t;
+      short += '\n[Attached file: ' + a.file.name + ']';
+    });
+    if (imgs.length) {
+      var lim = null;
+      try { lim = await AI.limits(); } catch (e) {}
+      if (!lim || !lim.images) { await feed.coach('Photos can\u2019t be sent to the AI right now. You can paste the text of the question instead.', 300); return; }
+    }
+    var turn = { role: 'user', content: full };
+    hist.push(turn);
+    hist = hist.slice(-10);
+    var b = await feed.coach('Thinking\u2026', 0);
+    try {
+      var r = await AI([{ role: 'user', content: RULES }].concat(hist), {
+        cache: false, tools: TOOLS, modelTier: imgs.length ? 'default' : 'quick', images: imgs.length ? imgs : undefined,
+        onText: function (o) { b.textContent = o.text; feed.scroll(); }
+      });
+      b.textContent = r.text;
+      turn.content = short;
+      hist.push({ role: 'assistant', content: r.text });
+    } catch (e) {
+      hist.splice(hist.indexOf(turn), 1);
+      b.textContent = e && e.text ? e.text : (e && e.code === 'not_granted' ? 'AI is turned off for this page. Allow it to get answers.' : (e && e.code === 'rate_limited' ? 'Too many questions at once. Wait a moment and try again.' : 'Something went wrong. Please try again.'));
+    }
+    feed.scroll();
+  }
+
+  /* ---------------- HOMEWORK ---------------- */
+  var H = { stage: 'menu', tries: 0, offer: false, p: null };
+  var P1 = {
+    eq: '3x + 5 = 20', after: '3x = 15', ans: 5,
+    check: '3 × 5 + 5 = 20',
+    opts: [
+      { label: 'Subtract 5 from both sides', ok: true },
+      { label: 'Divide everything by 3', hint: 'You can, but then 5 and 20 both need dividing too, and the numbers get messy. Is there a loose number you could remove first?' },
+      { label: 'Add 5 to both sides', hint: 'Adding 5 would turn the left side into 3x + 10. Which operation undoes a “+ 5”?' }
+    ],
+    hint: '3 times what number gives 15? Dividing both sides by 3 will tell you.',
+    solution: 'Divide both sides by 3: x = 5. Check: 3 × 5 + 5 = 20.'
+  };
+  var P2 = {
+    eq: '2x − 4 = 10', after: '2x = 14', ans: 7,
+    check: '2 × 7 − 4 = 10',
+    opts: [
+      { label: 'Add 4 to both sides', ok: true },
+      { label: 'Subtract 4 from both sides', hint: 'Subtracting 4 would make it 2x − 8. Which operation undoes a “− 4”?' },
+      { label: 'Divide everything by 2', hint: 'You can, but then 4 and 10 both need halving. Is there a loose number you could remove first?' }
+    ],
+    hint: '2 times what number gives 14? Dividing both sides by 2 will tell you.',
+    solution: 'Divide both sides by 2: x = 7. Check: 2 × 7 − 4 = 10.'
+  };
+
+  function hwMenu() {
+    H.stage = 'menu';
+    fHw.chips([
+      { label: 'Solve 3x + 5 = 20', k: 'alg' },
+      { label: 'Explain photosynthesis', k: 'photo' }
+    ], function (o) { if (o.k === 'alg') algebra1(); else photo1(); });
+  }
+
+  async function hwStart() {
+    await fHw.coach('Tell me what you are stuck on. I will not hand you the answer first. I will ask what you already know, explain the idea, and let you try. Ask me anything below, or pick a sample to see how it works.', 0);
+    hwMenu();
+  }
+
+  async function algebra1() {
+    H.stage = 'pick';
+    await fHw.coach('Good one. Before we solve it, what do you think the goal is when you “solve for x”?');
+    fHw.chips([
+      { label: 'Get x alone on one side', r: 'Right. We want x by itself, so the other side tells us its value.' },
+      { label: 'Make both sides equal 20', r: 'Both sides are already equal in the equation. The goal is to get x alone on one side, so the other side tells us its value.' },
+      { label: 'I am not sure', r: 'That is fine. The goal is to get x alone on one side, so the other side tells us its value.' }
+    ], async function (o) {
+      await fHw.coach(o.r);
+      await fHw.coach('Think of the equation as a balance scale. Whatever you do to one side, you must do to the other, so it stays level.<br><br>Example: <strong>x + 2 = 7</strong>. Take 2 away from both sides and you get <strong>x = 5</strong>.', 700);
+      startProblem(P1);
+    });
+  }
+
+  async function startProblem(p) {
+    H.p = p;
+    await fHw.coach('Now your turn with <strong>' + p.eq + '</strong>. What should you do first?');
+    askFirst(p, p.opts);
+  }
+
+  function askFirst(p, opts) {
+    H.stage = 'pick';
+    fHw.chips(opts, async function (o) {
+      if (o.ok) {
+        await fHw.coach('Yes. That gives <strong>' + p.after + '</strong>. What is x? Type your answer below.');
+        H.stage = 'ans';
+        H.tries = 0;
+        H.offer = false;
+        $('#msg').focus();
+      } else {
+        await fHw.coach(o.hint);
+        askFirst(p, opts.filter(function (x) { return x !== o; }));
+      }
+    });
+  }
+
+  async function finishProblem(p) {
+    H.stage = 'busy';
+    await fHw.coach('Correct, x = ' + p.ans + '. Check it: ' + p.check + '. Checking your own answer is a habit worth keeping.');
+    if (p === P1) {
+      await fHw.coach('One more thing. In your own words, why did we do the same thing to both sides? Type a sentence.');
+      H.stage = 'why';
+    } else {
+      await fHw.coach('You needed less help on that one. That is how you know it is sinking in.');
+      fHw.chips([{ label: 'Explain photosynthesis', k: 'photo' }, { label: 'Start over', k: 'alg' }], function (o) {
+        if (o.k === 'alg') algebra1(); else photo1();
+      });
+      H.stage = 'menu';
+    }
+  }
+
+  async function photo1() {
+    H.stage = 'pick';
+    await fHw.coach('What do you already know about how plants get their energy?');
+    fHw.chips([
+      { label: 'They use sunlight', r: 'Yes, sunlight is a big part of it.' },
+      { label: 'They use water', r: 'Right, water is one of the ingredients.' },
+      { label: 'No idea yet', r: 'No problem. We will build it up from scratch.' }
+    ], async function (o) {
+      await fHw.coach(o.r);
+      await fHw.coach('Picture a leaf as a tiny kitchen. Sunlight is the oven heat. Water and carbon dioxide from the air are the ingredients. The meal is sugar, which the plant uses for energy. Oxygen is the leftover that comes out. That is photosynthesis.', 800);
+      await fHw.coach('Check: in this kitchen, which one is the meal?');
+      photoCheck([
+        { label: 'Sugar', ok: true },
+        { label: 'Oxygen', hint: 'Look at the kitchen picture again. The meal is what the cook is trying to make for the plant to eat.' },
+        { label: 'Carbon dioxide', hint: 'Carbon dioxide is an ingredient that goes in, not the meal that comes out.' }
+      ]);
+    });
+  }
+
+  function photoCheck(opts) {
+    H.stage = 'pick';
+    fHw.chips(opts, async function (o) {
+      if (o.ok) {
+        await fHw.coach('Yes. Sugar is what the plant makes and uses for energy. Oxygen is the by-product that we breathe.');
+        await fHw.coach('Want to try another topic?');
+        hwMenu();
+      } else {
+        await fHw.coach(o.hint);
+        photoCheck(opts.filter(function (x) { return x !== o; }));
+      }
+    });
+  }
+
+  async function hwText(t) {
+    fHw.user(t);
+    var p = H.p;
+    if (H.stage === 'ans') {
+      var n = Number(t.trim().replace(',', '.'));
+      if (t.trim() === '' || isNaN(n)) {
+        await fHw.coach('Type just a number, like 4.', 300);
+      } else if (n === p.ans) {
+        finishProblem(p);
+      } else {
+        H.tries += 1;
+        if (H.tries === 1) {
+          await fHw.coach('Not quite. Hint: ' + p.hint);
+        } else if (!H.offer) {
+          H.offer = true;
+          await fHw.coach('Still not it. Try once more, or I can show the full solution.');
+          fHw.chips([{ label: 'Show the solution' }], async function () {
+            await fHw.coach(p.solution);
+            finishProblem(p);
+          });
+        } else {
+          await fHw.coach('Try once more, or tap “Show the solution”.', 300);
+        }
+      }
+    } else if (H.stage === 'why') {
+      H.stage = 'busy';
+      await fHw.coach('Good thinking. Keeping the scale balanced is the whole idea. Ready for a similar problem?');
+      fHw.chips([{ label: 'Try 2x − 4 = 10', k: 'p2' }, { label: 'Pick another topic', k: 'menu' }], function (o) {
+        if (o.k === 'p2') startProblem(P2); else hwMenu();
+      });
+    } else if (H.stage === 'pick') {
+      await fHw.coach('Tap one of the choices above, or tell me what you are thinking.', 300);
+    } else {
+      await askAI(fHw, t);
+    }
+  }
+
+  /* ---------------- BIG GOALS ---------------- */
+  var G = { stage: 'goal', key: null, name: '', why: '', deadline: '' };
+  var goalSent = false;
+  function saveGoals() { S.goals = G.stage === 'done' ? { G: G, sent: goalSent } : null; persist(); }
+  var GOALS = {
+    doctor: {
+      name: 'Become a doctor',
+      big: 'Reach top grades in biology and chemistry, and complete 40 hours of volunteering.',
+      month: 'Finish chemistry unit 3 and book a hospital volunteering slot.',
+      week: 'Three 45-minute study blocks and 20 practice questions.',
+      today: 'Review chemistry unit 3 notes for 45 minutes.'
+    },
+    code: {
+      name: 'Learn programming',
+      big: 'Build and publish one small app you are proud of.',
+      month: 'Finish loops and functions, then build a number-guessing game.',
+      week: 'Complete five short exercises on loops.',
+      today: 'Write and run a 10-line program that prints a times table.'
+    },
+    finals: {
+      name: 'Pass my final exams',
+      big: 'Cover every subject once, then spend the last month on past papers.',
+      month: 'Finish the weakest subject’s syllabus and take one timed past paper.',
+      week: 'Two subjects, three sessions each, plus a 20-minute recap.',
+      today: 'Do one timed past-paper section in your weakest subject.'
+    }
+  };
+
+  function generic(name) {
+    return {
+      name: name,
+      big: 'Describe what “' + name + '” looks like when it is done, and list the three biggest steps.',
+      month: 'Pick the first big step and split it into four weekly pieces.',
+      week: 'Finish one piece, then note what slowed you down.',
+      today: 'Spend 25 minutes on the first piece.'
+    };
+  }
+
+  async function goalsStart() {
+    G = { stage: 'goal', key: null, name: '', why: '', deadline: '' };
+    goalSent = false;
+    saveGoals();
+    await fGoals.coach('Tell me one big goal. I will work backward from it into steps you can take this month, this week and today. Pick one or type your own below.', 0);
+    fGoals.chips([
+      { label: 'Become a doctor', k: 'doctor' },
+      { label: 'Learn programming', k: 'code' },
+      { label: 'Pass my final exams', k: 'finals' }
+    ], function (o) { chooseGoal(o.k, o.label); });
+  }
+
+  async function chooseGoal(key, name) {
+    G.key = key;
+    G.name = name;
+    G.stage = 'why';
+    await fGoals.coach('Good goal. Why does it matter to you? One sentence is enough, or tap one.');
+    fGoals.chips([
+      { label: 'It matters to my future' },
+      { label: 'It matters to my family' },
+      { label: 'I want to prove I can' }
+    ], function (o) { answerWhy(o.label); });
+  }
+
+  async function answerWhy(text) {
+    G.why = text;
+    G.stage = 'deadline';
+    await fGoals.coach('Keep that reason close. On hard weeks it is what keeps the plan going. When do you want to reach this goal?');
+    fGoals.chips([
+      { label: 'In 3 months' },
+      { label: 'In 1 year' },
+      { label: 'In 3 years' }
+    ], function (o) { buildRoadmap(o.label); });
+  }
+
+  function showRoadmap(d) {
+    var card = el('div', 'card');
+    card.innerHTML =
+      '<div class="card-head"><strong>' + esc(G.name) + '</strong><span class="count">' + esc(G.deadline) + '</span></div>' +
+      '<ol class="ladder">' +
+      '<li><span class="lvl">Main milestone</span><p>' + esc(d.big) + '</p></li>' +
+      '<li><span class="lvl">This month</span><p>' + esc(d.month) + '</p></li>' +
+      '<li><span class="lvl">This week</span><p>' + esc(d.week) + '</p></li>' +
+      '<li><span class="lvl">Today</span><p>' + esc(d.today) + '</p><button type="button" class="primary small">Add to Today</button></li>' +
+      '</ol>';
+    fGoals.add(card);
+    var btn = $('.primary', card);
+    if (goalSent) { btn.disabled = true; btn.textContent = 'Added to Today'; }
+    btn.addEventListener('click', function () {
+      addToToday(d.today, 'From Big Goals');
+      goalSent = true;
+      saveGoals();
+      btn.disabled = true;
+      btn.textContent = 'Added to Today';
+    });
+  }
+
+  async function buildRoadmap(deadline) {
+    G.deadline = deadline;
+    G.stage = 'done';
+    goalSent = false;
+    saveGoals();
+    var d = (G.key && GOALS[G.key]) ? GOALS[G.key] : null;
+    if (!d && AI) {
+      var wb = await fGoals.coach('Building your plan\u2026', 0);
+      try {
+        var j = await AI.json('A student has this goal: "' + G.name + '". Reason they gave: "' + G.why + '". Target: ' + G.deadline + '. Work backward and reply with JSON only: {"big":"main milestone","month":"what to do this month","week":"what to do this week","today":"one concrete action under 30 minutes"}. Each value one short sentence, specific to the goal.', { modelTier: 'quick', cache: false });
+        if (j && j.big && j.month && j.week && j.today) d = { big: String(j.big), month: String(j.month), week: String(j.week), today: String(j.today) };
+      } catch (e) {}
+      wb.remove();
+    }
+    d = d || generic(G.name);
+    G.plan = d;
+    saveGoals();
+    await fGoals.coach('Here is the plan, working backward from the goal to what you can do today.', 600);
+    showRoadmap(d);
+    await fGoals.coach('Plans change, so we review this every Sunday. If a week goes badly, we shrink the steps, not the goal.', 600);
+    fGoals.chips([{ label: 'Try a different goal' }], function () { goalsStart(); });
+  }
+
+  async function goalsInit() {
+    var sv = S.goals;
+    if (sv && sv.G && sv.G.stage === 'done' && sv.G.name) {
+      G = sv.G;
+      goalSent = !!sv.sent;
+      var d = G.plan || ((G.key && GOALS[G.key]) ? GOALS[G.key] : generic(G.name));
+      await fGoals.coach('Welcome back. Here is your plan for “' + esc(G.name) + '”.', 0);
+      showRoadmap(d);
+      await fGoals.coach('We review this every Sunday. If a week goes badly, we shrink the steps, not the goal.', 0);
+      fGoals.chips([{ label: 'Try a different goal' }], function () { goalsStart(); });
+    } else {
+      goalsStart();
+    }
+  }
+
+  async function goalsText(t) {
+    fGoals.user(t);
+    if (G.stage === 'goal') {
+      chooseGoal(null, t);
+    } else if (G.stage === 'why') {
+      answerWhy(t);
+    } else if (G.stage === 'deadline') {
+      buildRoadmap(t);
+    } else {
+      await askAI(fGoals, t);
+    }
+  }
+
+  /* ---------------- SHELL ---------------- */
+  var modes = {
+    today: { feed: $('#feed-today'), api: fToday, ph: 'Add your own task', text: todayText },
+    homework: { feed: $('#feed-homework'), api: fHw, ph: 'Type your answer or question', text: hwText },
+    goals: { feed: $('#feed-goals'), api: fGoals, ph: 'Type a goal of your own', text: goalsText }
+  };
+
+  function setMode(m) {
+    active = m;
+    Object.keys(modes).forEach(function (k) { modes[k].feed.hidden = k !== m; });
+    document.querySelectorAll('.tab').forEach(function (b) {
+      if (b.dataset.mode === m) b.setAttribute('aria-current', 'true');
+      else b.removeAttribute('aria-current');
+    });
+    $('#msg').placeholder = modes[m].ph;
+    $('#attach').hidden = m === 'today';
+    renderAtts();
+    if (m === 'today') $('#badge-today').hidden = true;
+    modes[m].api.scroll();
+  }
+
+  document.querySelectorAll('.tab').forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.dataset.mode); });
+  });
+
+  var pending = [];
+  function renderAtts() {
+    var box = $('#atts');
+    box.innerHTML = '';
+    box.hidden = !pending.length || active === 'today';
+    pending.forEach(function (a, i) {
+      var c = el('div', 'att');
+      if (a.image) { var im = document.createElement('img'); im.src = a.url; im.alt = ''; c.append(im); }
+      var sp = document.createElement('span'); sp.textContent = a.file.name; c.append(sp);
+      var x = el('button'); x.type = 'button'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove ' + a.file.name);
+      x.addEventListener('click', function () { if (a.url) URL.revokeObjectURL(a.url); pending.splice(i, 1); renderAtts(); });
+      c.append(x);
+      box.append(c);
+    });
+  }
+  $('#attach').addEventListener('click', function () { $('#files').click(); });
+  $('#files').addEventListener('change', async function (e) {
+    var list = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = '';
+    var f = modes[active].api, skipped = [];
+    for (var i = 0; i < list.length; i++) {
+      var file = list[i];
+      if (pending.length >= 4) { skipped.push(file.name + ' (max 4 attachments)'); continue; }
+      if (file.size > 8 * 1024 * 1024) { skipped.push(file.name + ' (over 8 MB)'); continue; }
+      if (/^image\//.test(file.type)) { pending.push({ file: file, image: true, url: URL.createObjectURL(file) }); continue; }
+      if (/\.(txt|md|csv|json)$/i.test(file.name) || /^text\//.test(file.type)) {
+        try { pending.push({ file: file, text: await file.text() }); } catch (err) { skipped.push(file.name + ' (could not read)'); }
+        continue;
+      }
+      skipped.push(file.name + ' (PDF and Word files are not supported yet; attach a photo of the page or a .txt file)');
+    }
+    renderAtts();
+    if (skipped.length) await f.coach('Skipped: ' + esc(skipped.join('; ')) + '.', 0);
+  });
+
+  $('#composer').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = $('#msg');
+    var v = input.value.trim();
+    if (pending.length && active !== 'today') {
+      var atts = pending; pending = []; input.value = '';
+      renderAtts();
+      var feed = modes[active].api;
+      var b = feed.user(v || 'Please help me with this.');
+      atts.forEach(function (a) {
+        if (a.image) { var im = document.createElement('img'); im.src = a.url; im.alt = a.file.name; b.prepend(im); }
+        else { var d = document.createElement('div'); d.textContent = '\ud83d\udcc4 ' + a.file.name; b.append(d); }
+      });
+      askAI(feed, v || 'Please help me with this.', atts);
+      return;
+    }
+    if (!v) return;
+    input.value = '';
+    modes[active].text(v);
+  });
+
+  todayStart();
+  hwStart();
+  setMode(active);
+  goalsInit();
+
+  $('#reset').addEventListener('click', function () {
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+})();
+</script>
+
+</body></html>
